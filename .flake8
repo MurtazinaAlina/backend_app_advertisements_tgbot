@@ -1,0 +1,16 @@
+[flake8]
+max-line-length = 120
+exclude=
+    venv,
+    .flake8,
+    .env,db.sqlite3,
+    manage.py,
+    NOTES.md,
+    pyproject.toml,
+    README.md,
+    .gitignore,
+    adv_app/migrations
+ignore=
+    F401
+    F541
+    W504

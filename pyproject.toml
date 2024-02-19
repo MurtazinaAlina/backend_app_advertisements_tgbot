@@ -1,0 +1,21 @@
+[tool.black]
+line-length = 100
+target_version = ['py37']
+exclude = '''
+(
+    /(
+        \.git
+        | \.env
+        | \.flake8
+        | \.gitignore
+        | db.sqlite3
+        | docker-compose.yml
+        | Dockerfile
+        | manage.py
+        | venv
+        | adv_app/migrations
+        | NOTES.md
+        | README.md
+    )/
+)
+'''

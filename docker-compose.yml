@@ -1,0 +1,15 @@
+version: '3'
+
+services:
+
+  web:
+    container_name: web
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: django_tg_advs_app/web:latest  # задаем имя образа
+    command: sh -c "python manage.py runscript -v2 app & python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - .:/code
+    ports:
+      - "8001:8000"
