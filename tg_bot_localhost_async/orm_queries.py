@@ -81,11 +81,21 @@ async def orm_search_in_advertisements(session: AsyncSession, data: dict):
     query = (
         select(AdvSql)
         .where(
-            (AdvSql.title.contains(data["search_param"])) |
-            (AdvSql.description.contains(data["search_param"]))
+            (AdvSql.title.contains(data["search_param"]))
+            | (AdvSql.description.contains(data["search_param"]))
         )
         .where(AdvSql.status == "OPEN")
         .order_by(desc(AdvSql.id))
     )
     res = await session.execute(query)
     return res.scalars().all()
+
+
+async def count_open_advs(session: AsyncSession, user_id: int) -> int:
+    """
+    Счетчик открытых объявлений у пользователя
+    """
+    query = select(AdvSql).where(AdvSql.creator_id == user_id, AdvSql.status == "OPEN")
+    res = await session.execute(query)
+    info = res.scalars().all()
+    return len(info)

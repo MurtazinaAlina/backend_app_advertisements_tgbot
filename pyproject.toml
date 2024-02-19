@@ -6,6 +6,7 @@ exclude = '''
     /(
         \.git
         | \.env
+        | \.env.template
         | \.flake8
         | \.gitignore
         | db.sqlite3

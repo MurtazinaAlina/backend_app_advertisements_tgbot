@@ -81,8 +81,8 @@ async def orm_search_in_advertisements(session: AsyncSession, data: dict):
     query = (
         select(AdvSql)
         .where(
-            (AdvSql.title.contains(data["search_param"])) |
-            (AdvSql.description.contains(data["search_param"]))
+            (AdvSql.title.contains(data["search_param"]))
+            | (AdvSql.description.contains(data["search_param"]))
         )
         .where(AdvSql.status == "OPEN")
         .order_by(desc(AdvSql.id))

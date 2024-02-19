@@ -22,6 +22,7 @@ from tg_bot_localhost_async.orm_queries import (
     orm_delete_from_favourites,
     orm_search_in_advertisements,
     orm_get_advertisement_by_id,
+    count_open_advs,
 )
 
 
@@ -482,12 +483,23 @@ async def update_adv_start(callback: types.CallbackQuery, state: FSMContext, ses
 # noinspection PyUnusedLocal
 @router.message(StateFilter(None), F.text == "➕ Новое объявление")
 async def create_adv(
-    message: types.Message, state: FSMContext, auth_token: str
+    message: types.Message, session: AsyncSession, state: FSMContext, auth_token: str
 ):  # для закрытия доступа неавторизов
     """
     ADD объявление, шаг 1.
     Запрос ввода названия
     """
+
+    user_id = Token.objects.filter(key=auth_token).first().user.id
+
+    # проверка на соблюдения лимита открытых объявлений у пользователя
+    count = await count_open_advs(session, user_id)
+    if count >= 10:
+        await message.answer(
+            "У пользователя не может быть одновременно более 10 открытых объявлений"
+        )
+        return
+
     await message.answer(
         "<b>Сейчас бот запросит данные для создания объявления.</b>\nЕсли вы захотите вернуться на "
         "шаг назад и изменить указанные данные, введите в строке слово <b>назад</b>"
@@ -544,7 +556,9 @@ async def create_adv_set_descr(message: types.Message, state: FSMContext):
 
 # noinspection PyUnresolvedReferences
 @router.message(AddAdv.status, F.text)
-async def create_adv_set_status_creator(message: types.Message, state: FSMContext, auth_token: str):
+async def create_adv_set_status_creator(
+    message: types.Message, session: AsyncSession, state: FSMContext, auth_token: str
+):
     """
     UPDATE/ADD объявления, шаг 4.
     Запись статуса и создание/изменение
@@ -569,6 +583,14 @@ async def create_adv_set_status_creator(message: types.Message, state: FSMContex
     adv_id = None
     if data.get("id"):
         adv_id = data.pop("id")
+
+        # проверка ограничения на 10 открытых объявлений, запрет обхода при редактировании
+        count = await count_open_advs(session, user_id=user.id)
+        if count >= 10 and data["status"] == "OPEN" and AddAdv.adv_object.status != data["status"]:
+            await message.answer(
+                "У пользователя не может быть одновременно более 10 открытых объявлений"
+            )
+            return
 
     try:
         res, _ = Advertisement.objects.update_or_create(id=adv_id, creator=user, defaults={**data})
