@@ -1,0 +1,29 @@
+name: форматирование и линтинг при пуше
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  lint_and_format:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: проверяем на изменения
+        uses: actions/checkout@v3
+
+      - name: установка python в git
+        uses: actions/setup-python@v3
+        with:
+          python-version: 3.11
+
+      - name: установка зависимостей
+        run:
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: formatting
+        run: black --config pyproject.toml .
+
+      - name: linting
+        run: flake8 --config .flake8 .
