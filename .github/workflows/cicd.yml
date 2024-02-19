@@ -13,7 +13,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: установка python в git
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v2
         with:
           python-version: 3.11
 
