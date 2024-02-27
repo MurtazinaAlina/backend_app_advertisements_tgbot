@@ -1,0 +1,6 @@
+[MESSAGES CONTROL]
+max-line-length = 120
+disable = import-outside-toplevel, 
+        wrong-import-position, 
+        wrong-import-order,
+        missing-module-docstring
