@@ -6,24 +6,12 @@ from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.db.models import Q
 from rest_framework.authtoken.models import Token
-from sqlalchemy import select
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adv_app.models import Advertisement, Favourites
 from .keyboards import get_keyboard, get_callback_btns
 from .middlewares import AuthSession
-from .models_alchemy import AdvSql
-from .orm_queries import (
-    orm_get_all_open_advertisements,
-    orm_get_user_advertisements,
-    orm_get_user_drafts,
-    orm_get_user_favourites,
-    orm_delete_advertisement,
-    orm_delete_from_favourites,
-    orm_search_in_advertisements,
-    orm_get_advertisement_by_id,
-)
 
 
 router = Router()
@@ -48,6 +36,9 @@ START_AUTH_KB = [
 ]
 START_AUTH_PLACEHOLDER = "Выберите действие"
 START_AUTH_SIZES = (2, 2, 2)
+
+# статусы заявок для inline-кнопок
+STATE_BTNS = {'OPEN': 'state_open', 'CLOSED': 'state_closed', 'DRAFT': 'state_draft'}
 
 
 @router.message(CommandStart())
@@ -563,55 +554,57 @@ async def create_adv_set_descr(message: types.Message, state: FSMContext):
             await message.answer("Описание не может содержать менее 5 символов. Введите заново")
             return
 
-    await message.answer("Введите статус OPEN, CLOSED ИЛИ DRAFT")
+    # await message.answer("Введите статус OPEN, CLOSED ИЛИ DRAFT")
+    await message.answer(text='Выберите статус объявления', reply_markup=get_callback_btns(
+        btns=STATE_BTNS, sizes=(3,)))
     await state.set_state(AddAdv.status)
 
 
-# noinspection PyUnresolvedReferences
-@router.message(AddAdv.status, F.text)
-async def create_adv_set_status_creator(message: types.Message, state: FSMContext, auth_token: str):
+## noinspection PyUnresolvedReferences
+@router.callback_query(AddAdv.status)
+async def create_adv_set_status_creator(
+        callback: types.CallbackQuery, session: AsyncSession, state: FSMContext, auth_token: str
+):
     """
     UPDATE/ADD объявления, шаг 4.
     Запись статуса и создание/изменение
     """
 
-    # логика пропуска шага при апдейте, оставляем старые данные
-    if message.text == ".":
-        await state.update_data(status=AddAdv.adv_object.status)
+    passed_state = [i for i in STATE_BTNS if STATE_BTNS[i] == callback.data]
 
+    if passed_state:
+        await state.update_data(status=passed_state[0])
     else:
-        # проверяем допустимое значение статуса
-        if {message.text}.intersection(["OPEN", "DRAFT", "CLOSED", "."]):
-            await state.update_data(status=message.text)
-        else:
-            await message.answer("Некорректное значение. Введите статус заново")
-            return
+        await callback.message.answer(
+            text='Некорректное значение. Введите статус заново', reply_markup=get_callback_btns(
+                btns=STATE_BTNS, sizes=(3, )))
+        return
 
     user = Token.objects.filter(key=auth_token).first().user
     await state.update_data(creator=user)
     data = await state.get_data()
 
+    adv_id = None
+    if data.get("id"):
+        adv_id = data.pop("id")
+
     # проверяем, что пользователь при смене статуса/создании не превышает максимально допустимое кол-во объявлений
-    if message.text == "OPEN":
+    if passed_state[0] == "OPEN":
         counter = Advertisement.objects.filter(status="OPEN", creator=user).count()
-        if counter >= 5:
+        if counter >= 10:
             # проверка, что это не редактирование уже ранее открытого объявления
             if AddAdv.adv_object:
                 if AddAdv.adv_object.status != "OPEN":
-                    await message.answer(
-                        "У пользователя может быть не более 5 открытых объявлений одновременно"
+                    await callback.message.answer(
+                        "У пользователя может быть не более 10 открытых объявлений одновременно"
                     )
                     return
             # если создание нового при максимально допустимом значении
             else:
-                await message.answer(
-                    "У пользователя может быть не более 5 открытых объявлений одновременно"
+                await callback.message.answer(
+                    "У пользователя может быть не более 10 открытых объявлений одновременно"
                 )
                 return
-
-    adv_id = None
-    if data.get("id"):
-        adv_id = data.pop("id")
 
     try:
         res, _ = Advertisement.objects.update_or_create(id=adv_id, creator=user, defaults={**data})
@@ -624,9 +617,74 @@ async def create_adv_set_status_creator(message: types.Message, state: FSMContex
 
     await state.clear()
     AddAdv.adv_object = None
-    await message.answer(
+    await callback.message.answer(
         msg,
         reply_markup=get_keyboard(
             *START_AUTH_KB, placeholder=START_AUTH_PLACEHOLDER, sizes=START_AUTH_SIZES
         ),
     )
+
+
+# # noinspection PyUnresolvedReferences
+# @router.message(AddAdv.status, F.text)
+# async def create_adv_set_status_creator(message: types.Message, state: FSMContext, auth_token: str):
+#     """
+#     UPDATE/ADD объявления, шаг 4.
+#     Запись статуса и создание/изменение
+#     """
+#
+#     # логика пропуска шага при апдейте, оставляем старые данные
+#     if message.text == ".":
+#         await state.update_data(status=AddAdv.adv_object.status)
+#
+#     else:
+#         # проверяем допустимое значение статуса
+#         if {message.text}.intersection(["OPEN", "DRAFT", "CLOSED", "."]):
+#             await state.update_data(status=message.text)
+#         else:
+#             await message.answer("Некорректное значение. Введите статус заново")
+#             return
+#
+#     user = Token.objects.filter(key=auth_token).first().user
+#     await state.update_data(creator=user)
+#     data = await state.get_data()
+#
+#     # проверяем, что пользователь при смене статуса/создании не превышает максимально допустимое кол-во объявлений
+#     if message.text == "OPEN":
+#         counter = Advertisement.objects.filter(status="OPEN", creator=user).count()
+#         if counter >= 5:
+#             # проверка, что это не редактирование уже ранее открытого объявления
+#             if AddAdv.adv_object:
+#                 if AddAdv.adv_object.status != "OPEN":
+#                     await message.answer(
+#                         "У пользователя может быть не более 5 открытых объявлений одновременно"
+#                     )
+#                     return
+#             # если создание нового при максимально допустимом значении
+#             else:
+#                 await message.answer(
+#                     "У пользователя может быть не более 5 открытых объявлений одновременно"
+#                 )
+#                 return
+#
+#     adv_id = None
+#     if data.get("id"):
+#         adv_id = data.pop("id")
+#
+#     try:
+#         res, _ = Advertisement.objects.update_or_create(id=adv_id, creator=user, defaults={**data})
+#         if res:
+#             msg = "Объявление опубликовано"
+#         else:
+#             msg = "Произошла ошибка"
+#     except Exception as e:
+#         msg = f"Произошла ошибка: {e} "
+#
+#     await state.clear()
+#     AddAdv.adv_object = None
+#     await message.answer(
+#         msg,
+#         reply_markup=get_keyboard(
+#             *START_AUTH_KB, placeholder=START_AUTH_PLACEHOLDER, sizes=START_AUTH_SIZES
+#         ),
+#     )
