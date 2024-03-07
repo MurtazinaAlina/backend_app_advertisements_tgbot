@@ -48,7 +48,7 @@ START_AUTH_PLACEHOLDER = "Выберите действие"
 START_AUTH_SIZES = (2, 2, 2)
 
 # статусы заявок для inline-кнопок
-STATE_BTNS = {'OPEN': 'state_open', 'CLOSED': 'state_closed', 'DRAFT': 'state_draft'}
+STATE_BTNS = {"OPEN": "state_open", "CLOSED": "state_closed", "DRAFT": "state_draft"}
 
 
 @router.message(CommandStart())
@@ -80,15 +80,18 @@ def split_to_pages(array: list, page=1):
     # формирование кнопок навигации
     btns = {}
     if paginator.has_previous():
-        btns['⬅ Назад'] = f'page_{page-1}'
+        btns["⬅ Назад"] = f"page_{page-1}"
     if paginator.has_next():
-        btns['Вперёд ➡'] = f'page_{page+1}'
+        btns["Вперёд ➡"] = f"page_{page+1}"
 
     return current_page, btns, paginator.pages
 
 
-@router.callback_query(F.data.startswith('page_'))
-async def test_pagi_cb(callback: types.CallbackQuery, session: AsyncSession, auth_token: str | None = None):
+# noinspection PyUnresolvedReferences
+@router.callback_query(F.data.startswith("page_"))
+async def test_pagi_cb(
+    callback: types.CallbackQuery, session: AsyncSession, auth_token: str | None = None
+):
     """
     Единая обработка callback-пагинации
     """
@@ -96,40 +99,40 @@ async def test_pagi_cb(callback: types.CallbackQuery, session: AsyncSession, aut
     auth = False
     queryset = None
     inline = None
-    symb = ''
+    symb = ""
     search_param = None
 
     # определяем множество для пагинации
-    qs_name = callback.data.split('_')[2]  # page_2_advs   el 2 is qs name
-    if qs_name == 'advs-all':
+    qs_name = callback.data.split("_")[2]  # page_2_advs   el 2 is qs name
+    if qs_name == "advs-all":
         queryset = await orm_get_all_open_advertisements(session)
         if auth_token:
             auth = True
-    elif qs_name == 'advs-my':
+    elif qs_name == "advs-my":
         user_id = Token.objects.get(key=auth_token).user.id
         queryset = await orm_get_user_advertisements(session, user_id)
-        inline = 'upd_or_del'
-        symb = '📌'
-    elif qs_name == 'advs-drafts':
+        inline = "upd_or_del"
+        symb = "📌"
+    elif qs_name == "advs-drafts":
         user_id = Token.objects.get(key=auth_token).user.id
         queryset = await orm_get_user_drafts(session, user_id)
-        inline = 'upd_or_del'
-        symb = '📝'
-    elif qs_name == 'advs-fvs':
+        inline = "upd_or_del"
+        symb = "📝"
+    elif qs_name == "advs-fvs":
         usr = User.objects.filter(auth_token__key=auth_token).first()
         fvs = usr.favourites.all()
         queryset = await orm_get_user_favourites(session, fvs)
-        inline = 'rm_from_fvs'
-    elif qs_name == 'advs-search':
+        inline = "rm_from_fvs"
+    elif qs_name == "advs-search":
         data = {}
-        search_param = callback.data.split('_')[3]
+        search_param = callback.data.split("_")[3]
         data["search_param"] = search_param
         queryset = await orm_search_in_advertisements(session, data)
-        symb = '🔎'
+        symb = "🔎"
         if auth_token:
             auth = True
 
-    page_number = int(callback.data.split('_')[1])  # page_1 el 1 is page number
+    page_number = int(callback.data.split("_")[1])  # page_1 el 1 is page number
     page = split_to_pages(queryset, page=page_number)
     current_page = page[0]
     cb_btns = page[1]
@@ -138,15 +141,15 @@ async def test_pagi_cb(callback: types.CallbackQuery, session: AsyncSession, aut
         for adv in current_page:
             await callback.message.answer(
                 f"{symb} <b>{adv.title}:</b>\n{adv.description}\n<i>{adv.status}</i>\nuser: {adv.creator_id}",
-                reply_markup=get_callback_btns(
-                    btns={"Добавить в избранное": f"add-fvr_{adv.id}"}))
-        if qs_name == 'advs-search':
-            cb_btns = {k: v + f'_{qs_name}_{search_param}' for k, v in cb_btns.items()}
+                reply_markup=get_callback_btns(btns={"Добавить в избранное": f"add-fvr_{adv.id}"}),
+            )
+        if qs_name == "advs-search":
+            cb_btns = {k: v + f"_{qs_name}_{search_param}" for k, v in cb_btns.items()}
         else:
-            cb_btns = {k: v + f'_{qs_name}_auth' for k, v in cb_btns.items()}
+            cb_btns = {k: v + f"_{qs_name}_auth" for k, v in cb_btns.items()}
 
     else:
-        if inline == 'upd_or_del':
+        if inline == "upd_or_del":
             for adv in current_page:
                 await callback.message.answer(
                     f"{symb} <b>{adv.title}:</b>\n{adv.description}\n<i>{adv.status}</i>\nuser: {adv.creator_id}",
@@ -155,28 +158,34 @@ async def test_pagi_cb(callback: types.CallbackQuery, session: AsyncSession, aut
                             "Изменить": f"update-adv_{adv.id}_{auth_token}",
                             "Удалить": f"delete-adv_{adv.id}_{auth_token}",
                         }
-                    ))
-        elif inline == 'rm_from_fvs':
+                    ),
+                )
+        elif inline == "rm_from_fvs":
             for adv in current_page:
                 await callback.message.answer(
                     f"⭐ <b>{adv.title}:</b>\n{adv.description}\n<i>{adv.status}</i>\nuser: {adv.creator_id}",
                     reply_markup=get_callback_btns(
                         btns={"Убрать из избранного": f"rm-fvr_{adv.id}_{auth_token}"}
-                    ))
-
+                    ),
+                )
 
         else:  # для просмотра всех объявлений
             for adv in current_page:
                 await callback.message.answer(
-                    f"{symb} <b>{adv.title}:</b>\n{adv.description}\n<i>{adv.status}</i>\nuser: {adv.creator_id}")
+                    f"{symb} <b>{adv.title}:</b>\n{adv.description}\n<i>{adv.status}</i>\nuser: {adv.creator_id}"
+                )
 
-        if qs_name == 'advs-search':
-            cb_btns = {k: v + f'_{qs_name}_{search_param}' for k, v in cb_btns.items()}
+        if qs_name == "advs-search":
+            cb_btns = {k: v + f"_{qs_name}_{search_param}" for k, v in cb_btns.items()}
         else:
-            cb_btns = {k: v + f'_{qs_name}' for k, v in cb_btns.items()}  # записываем тип множества в cb кнопки
+            cb_btns = {
+                k: v + f"_{qs_name}" for k, v in cb_btns.items()
+            }  # записываем тип множества в cb кнопки
 
-    await callback.message.answer(text=f'<b>Страница {page_number} из {page[2]}</b>',
-                                  reply_markup=get_callback_btns(btns=cb_btns, sizes=(2,)))
+    await callback.message.answer(
+        text=f"<b>Страница {page_number} из {page[2]}</b>",
+        reply_markup=get_callback_btns(btns=cb_btns, sizes=(2,)),
+    )
 
 
 "------------------------------------- Просмотр объявлений ----------------------------------------------"
@@ -203,8 +212,12 @@ async def all_advs_auth_page1(message: types.Message, session: AsyncSession, aut
         )
 
     cb_btns = page1[1]
-    cb_btns = {k: v + '_advs-all_auth' for k, v in cb_btns.items()}  # записываем тип множества в cb кнопки + признак auth
-    await message.answer(text=f'<b>Страница 1 из {page1[2]}</b>', reply_markup=get_callback_btns(btns=cb_btns))
+    cb_btns = {
+        k: v + "_advs-all_auth" for k, v in cb_btns.items()
+    }  # записываем тип множества в cb кнопки + признак auth
+    await message.answer(
+        text=f"<b>Страница 1 из {page1[2]}</b>", reply_markup=get_callback_btns(btns=cb_btns)
+    )
 
 
 @router.message(F.text == "Все объявления")
@@ -224,8 +237,12 @@ async def get_cmd_unauth(message: types.Message, session: AsyncSession):
         )
 
     cb_btns = page1[1]
-    cb_btns = {k: v + '_advs-all' for k, v in cb_btns.items()}  # записываем тип множества в cb кнопки
-    await message.answer(text=f'<b>Страница 1 из {page1[2]}</b>', reply_markup=get_callback_btns(btns=cb_btns))
+    cb_btns = {
+        k: v + "_advs-all" for k, v in cb_btns.items()
+    }  # записываем тип множества в cb кнопки
+    await message.answer(
+        text=f"<b>Страница 1 из {page1[2]}</b>", reply_markup=get_callback_btns(btns=cb_btns)
+    )
 
 
 # noinspection PyUnresolvedReferences
@@ -252,9 +269,12 @@ async def get_my_advs(message: types.Message, session: AsyncSession, auth_token:
         )
 
     cb_btns = page1[1]
-    cb_btns = {k: v + '_advs-my' for k, v in cb_btns.items()}  # записываем тип множества в cb кнопки
-    await message.answer(text=f'<b>Страница 1 из {page1[2]}</b>',
-                         reply_markup=get_callback_btns(btns=cb_btns))
+    cb_btns = {
+        k: v + "_advs-my" for k, v in cb_btns.items()
+    }  # записываем тип множества в cb кнопки
+    await message.answer(
+        text=f"<b>Страница 1 из {page1[2]}</b>", reply_markup=get_callback_btns(btns=cb_btns)
+    )
 
 
 # noinspection PyUnresolvedReferences
@@ -281,9 +301,12 @@ async def get_my_drafts(message: types.Message, session: AsyncSession, auth_toke
         )
 
     cb_btns = page1[1]
-    cb_btns = {k: v + '_advs-drafts' for k, v in cb_btns.items()}  # записываем тип множества в cb кнопки
-    await message.answer(text=f'<b>Страница 1 из {page1[2]}</b>',
-                         reply_markup=get_callback_btns(btns=cb_btns))
+    cb_btns = {
+        k: v + "_advs-drafts" for k, v in cb_btns.items()
+    }  # записываем тип множества в cb кнопки
+    await message.answer(
+        text=f"<b>Страница 1 из {page1[2]}</b>", reply_markup=get_callback_btns(btns=cb_btns)
+    )
 
 
 @router.message(F.text == "⭐ Избранное")
@@ -306,9 +329,10 @@ async def get_my_favourites(message: types.Message, session: AsyncSession, auth_
             ),
         )
     cb_btns = page1[1]
-    cb_btns = {k: v + '_advs-fvs' for k, v in cb_btns.items()}
-    await message.answer(text=f'<b>Страница 1 из {page1[2]}</b>',
-                         reply_markup=get_callback_btns(btns=cb_btns))
+    cb_btns = {k: v + "_advs-fvs" for k, v in cb_btns.items()}
+    await message.answer(
+        text=f"<b>Страница 1 из {page1[2]}</b>", reply_markup=get_callback_btns(btns=cb_btns)
+    )
 
 
 @router.message(F.text == "📴 Выйти из аккаунта")
@@ -555,9 +579,10 @@ async def search_advs_result(
             )
     await state.clear()
     cb_btns = page1[1]
-    cb_btns = {k: v + f'_advs-search_{message.text}' for k, v in cb_btns.items()}
-    await message.answer(text=f'<b>Страница 1 из {page1[2]}</b>',
-                         reply_markup=get_callback_btns(btns=cb_btns))
+    cb_btns = {k: v + f"_advs-search_{message.text}" for k, v in cb_btns.items()}
+    await message.answer(
+        text=f"<b>Страница 1 из {page1[2]}</b>", reply_markup=get_callback_btns(btns=cb_btns)
+    )
 
 
 "--------------------------- Авторизация -----------------------------------------"
@@ -647,6 +672,7 @@ async def update_adv_start(callback: types.CallbackQuery, state: FSMContext, ses
     await state.set_state(AddAdv.title)
 
 
+# noinspection PyUnresolvedReferences
 # noinspection PyUnusedLocal
 @router.message(StateFilter(None), F.text == "➕ Новое объявление")
 async def create_adv(
@@ -718,15 +744,17 @@ async def create_adv_set_descr(message: types.Message, state: FSMContext):
             return
 
     # await message.answer("Введите статус OPEN, CLOSED ИЛИ DRAFT")
-    await message.answer(text='Выберите статус объявления', reply_markup=get_callback_btns(
-        btns=STATE_BTNS, sizes=(3, )))
+    await message.answer(
+        text="Выберите статус объявления",
+        reply_markup=get_callback_btns(btns=STATE_BTNS, sizes=(3,)),
+    )
     await state.set_state(AddAdv.status)
 
 
 # noinspection PyUnresolvedReferences
 @router.callback_query(AddAdv.status)
 async def create_adv_set_status_creator(
-        callback: types.CallbackQuery, session: AsyncSession, state: FSMContext, auth_token: str
+    callback: types.CallbackQuery, session: AsyncSession, state: FSMContext, auth_token: str
 ):
     """
     UPDATE/ADD объявления, шаг 4.
@@ -739,8 +767,9 @@ async def create_adv_set_status_creator(
         await state.update_data(status=passed_state[0])
     else:
         await callback.message.answer(
-            text='Некорректное значение. Введите статус заново', reply_markup=get_callback_btns(
-                btns=STATE_BTNS, sizes=(3, )))
+            text="Некорректное значение. Введите статус заново",
+            reply_markup=get_callback_btns(btns=STATE_BTNS, sizes=(3,)),
+        )
         return
 
     user = Token.objects.filter(key=auth_token).first().user
